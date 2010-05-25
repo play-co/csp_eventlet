@@ -225,7 +225,7 @@ class CSPSession(object):
 #                print 'RECV null packet...'
                 self._null_received()
                 break
-            data = str(data)
+            data = unicode(data)
             if self.last_received >= key:
                 continue
             if encoding == 1:
