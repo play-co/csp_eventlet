@@ -115,7 +115,9 @@ def get_form(environ):
     for key, val in cgi.parse_qs(qs).items():
         form[key] = val[0]
     if environ['REQUEST_METHOD'].upper() == 'POST':
-        form['d'] = environ['wsgi.input'].read()
+        data = environ['wsgi.input'].read()
+#        print 'GOT out of FORM', repr(data)
+        form['d'] = data
     return form
         
         
@@ -193,6 +195,10 @@ class CSPSession(object):
     def blocking_send(self, data):
         if self.is_closed:
             raise Exception("CSPSession is closed, cannot call send")
+        if isinstance(data, unicode):
+            # NOTE: we specifically don't encode the data. You can only send 
+            #       bytes over csp. Do you rown decoding before you call send.
+            data = str(data)
         self.send_id+=1
         self.packets.append([self.send_id, 1, base64.urlsafe_b64encode(data)])
         if self._has_comet_request():
@@ -209,6 +215,7 @@ class CSPSession(object):
                 else:
                     raise Exception("CSPSession is closed, cannot call recv")
             self._read_queue.get()
+#        print 'self.buffer', repr(self.buffer)
         data = self.buffer[:max]
         self.buffer = self.buffer[max:]
         if not data:
@@ -222,10 +229,12 @@ class CSPSession(object):
         packets = json.loads(rawdata)
         for key, encoding, data in packets:
             if data == None:
-#                print 'RECV null packet...'
                 self._null_received()
                 break
-            data = unicode(data)
+            # TODO: This is pretty ridiculous... I'm sure we can just tell 
+            #       json.loads to just leave this as raw/ascii/binary somehow.
+            if isinstance(data, unicode):
+                data = data.encode('utf-8', 'replace')
             if self.last_received >= key:
                 continue
             if encoding == 1:
