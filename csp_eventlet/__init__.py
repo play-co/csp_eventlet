@@ -124,7 +124,8 @@ def get_form(environ):
 class CSPSocket(object):
     def __init__(self, session):
         self.session = session
-                
+        self.environ = session.environ
+        
     def send(self, data):
         return self.session.blocking_send(data)
     
@@ -134,6 +135,7 @@ class CSPSocket(object):
 class CSPSession(object):
     
     def __init__(self, parent, key, environ):
+        self.environ = environ
         self._recv_event = None
         self.parent = parent
         self.key = key
@@ -169,8 +171,7 @@ class CSPSession(object):
         self.update_vars(environ['csp.form'])
         self._socket = CSPSocket(self)
         eventlet.spawn(self._timeout, False)
-
-
+        
     def _timeout(self, is_teardown):
 #        print 'start _timeout'
         while True:

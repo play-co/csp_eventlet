@@ -4,7 +4,7 @@ import os, sys
 
 setup(
     name='csp_eventlet',
-    version='0.4.0',
+    version='0.4.1',
     author='Michael Carter',
     author_email='CarterMichael@gmail.com',
     url='http://github.com/mcarter/csp_eventlet',
