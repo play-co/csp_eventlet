@@ -129,6 +129,9 @@ class CSPSocket(object):
     def send(self, data):
         return self.session.blocking_send(data)
     
+    def sendall(self, data):
+        self.session.blocking_send(data)
+    
     def recv(self, max):
         return self.session.blocking_recv(max)
         
