@@ -10,9 +10,9 @@ except:
     import simplejson as json
     
     
-def test():
+def test(port):
     try:
-        l = csp_listener(("", 8000))
+        l = csp_listener(("", port))
         while True:
             conn, addr = l.accept()
             print 'ACCEPTED', conn, addr
@@ -24,11 +24,11 @@ def echo(conn):
     conn.send("Welcome")
     while True:
         d = conn.recv(1024)
-        print 'RECV', d
+        print 'RECV', repr(d)
         if not d:
             break
         conn.send(d)
-        print 'SEND', d
+        print 'SEND', repr(d)
     print "Conn closed"
 
 def csp_listener((interface, port)):
@@ -44,7 +44,7 @@ class Listener(object):
         self._sessions = {}
         
     def listen(self):
-        eventlet.spawn(wsgi.server, eventlet.tcp_listener((self.interface, self.port)), self)
+        eventlet.spawn(wsgi.server, eventlet.listen((self.interface, self.port)), self)
 
     def __call__(self, environ, start_response):
         path = environ['PATH_INFO']
@@ -355,4 +355,11 @@ class CSPSession(object):
         return output
     
 if __name__ == "__main__": 
-    test()
+    import sys
+#    print sys.argv
+    port = 8000
+    try:
+        port = int(sys.argv[1])
+    except:
+        pass
+    test(port)
