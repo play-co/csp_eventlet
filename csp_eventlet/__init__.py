@@ -152,7 +152,7 @@ class CSPSession(object):
         self.conn_vars = {
             "rp":"",
             "rs":"",
-            "du":1,
+            "du":30,
             "is":0, # False
             "i":0,
             "ps":0,
