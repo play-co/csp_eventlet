@@ -2,6 +2,7 @@ from __future__ import with_statement
 import eventlet
 from eventlet import wsgi
 import cgi
+import logging
 import uuid
 import base64
 try:
@@ -9,7 +10,9 @@ try:
 except:
     import simplejson as json
     
-    
+logger = logging.getLogger('csp_eventlet')
+
+
 def test(port):
     try:
         l = csp_listener(("", port))
@@ -59,25 +62,17 @@ class Listener(object):
             start_response('500 internal server error', [('Access-Control-Allow-Origin','*')])
             return "Error parsing form"
         session = None
-#        print '**', path, form
         if path != "/handshake":
-#            print 'a'
             key = form.get("s", None)
             if key not in self._sessions:
                 # TODO: error?
                 
                 start_response('404 Session not found', [('Access-Control-Allow-Origin','*')])
                 return "'Session not found'"
-#            print 'b'
             session = self._sessions[key]
-#            print 'c'
             session.update_vars(form)
-#            print 'd'
-#        print 'e'
         x = handler(session, environ, start_response)
-#        print 'f, x is', x
         if not x:
-#            print "ERROR", path
             return ".."
         return x
 
@@ -96,7 +91,6 @@ class Listener(object):
         return session.render_request("OK", start_response)
 
     def render_send(self, session, environ, start_response):
-#        print 'render_send'
         session.read(environ['csp.form'].get('d', ''))
         return session.render_request("OK", start_response)
 
@@ -116,7 +110,6 @@ def get_form(environ):
         form[key] = val[0]
     if environ['REQUEST_METHOD'].upper() == 'POST':
         data = environ['wsgi.input'].read()
-#        print 'GOT out of FORM', repr(data)
         form['d'] = data
     return form
         
@@ -159,7 +152,7 @@ class CSPSession(object):
         self.conn_vars = {
             "rp":"",
             "rs":"",
-            "du":30,
+            "du":1,
             "is":0, # False
             "i":0,
             "ps":0,
@@ -176,23 +169,17 @@ class CSPSession(object):
         eventlet.spawn(self._timeout, False)
         
     def _timeout(self, is_teardown):
-#        print 'start _timeout'
         while True:
             # SPEC TODO: No mention in csp spec (Draft 0.4 Nov 19, 2009) of
             #            session timeout. Choosing twice the comet duration or
             #            60 seconds when du = 0 (polling mode)
             with eventlet.timeout.Timeout(self.conn_vars['du'] * 2 or 60, False):
-#                print 'timeout?'
                 if self._activity_queue.get():
-#                    print 'timeout ended gracefully'
                     break
-#                print 'not yet.'
                 continue
             if is_teardown:
-#                print 'teardown timeout called...'
                 self.teardown()
             else:
-#                print 'close due to timeout...'
                 self.close()
             break
     
@@ -204,6 +191,7 @@ class CSPSession(object):
             #       bytes over csp. Do you rown decoding before you call send.
             data = str(data)
         self.send_id+=1
+        logger.debug('CSP SEND: %s', repr(data))
         self.packets.append([self.send_id, 1, base64.urlsafe_b64encode(data)])
         if self._has_comet_request():
             self._comet_request_channel.put(None)
@@ -213,17 +201,16 @@ class CSPSession(object):
         if not self.buffer:
             if self.is_closed:
                 if not self._raise_exc_next_recv:
-#                    print 'returning empty data'
+                    logger.debug('%s self.is_closed... returning empty data to signify close', self)
                     self._raise_exc_next_recv = True
                     return ""
                 else:
                     raise Exception("CSPSession is closed, cannot call recv")
             self._read_queue.get()
-#        print 'self.buffer', repr(self.buffer)
         data = self.buffer[:max]
         self.buffer = self.buffer[max:]
         if not data:
-#            print 'returning empty data'
+            logger.debug('%s returning empty data (to signify close)', self)
             self._raise_exc_next_recv = True
         return data
 
@@ -246,10 +233,10 @@ class CSPSession(object):
             self.last_received = key
             self.buffer += data
             if data:
+                logger.debug('csp RECV: %s', repr(data))
                 self._read_queue.put(None)
 
     def update_vars(self, form):
-#        print 'top of update vars'
         self._activity_queue.put(None)
         for key in self.conn_vars:
             if key in form:
@@ -271,24 +258,20 @@ class CSPSession(object):
             ack = -1
         while self.packets and ack >= self.packets[0][0]:
             self.packets.pop(0)
-#        print 'update_vars', self.is_closed, self.packets
-#        if self.is_closed and not self.packets:
-#            print 'call teardown'
-#            self.teardown()
 
     def close(self):
         self.is_closed = True
         self.send_id+=1
         self.packets.append([self.send_id, 0, None])
-#        print 'appending null packet..'
         if self._has_comet_request():
             self._comet_request_channel.put(None)
         if self._activity_queue.getting():
             self._activity_queue.put(True)
         eventlet.spawn(self._timeout, True)
+        if not self.buffer:
+            self._read_queue.put(None)
             
     def teardown(self):
-        self._read_queue.put(None)
         if self._activity_queue.getting():
             self._activity_queue.put(True)
         if self._has_comet_request():
@@ -327,7 +310,6 @@ class CSPSession(object):
         start_response("200 Ok", headers)
         
         output = self.render_prebuffer() + self.render_packets(self.packets)
-#        print 'comet returning', output
         if self.packets and self.packets[-1][2] is None:
             self._null_sent()
         return output
@@ -346,7 +328,6 @@ class CSPSession(object):
         return "%s(%s)%s%s" % (self.conn_vars["bp"], json.dumps(packets), self.conn_vars["bs"], sseid)            
 
             
-#    session.render_request({"session":key}, start_response)
     def render_request(self, data, start_response):
         headers = [ ('Content-type', self.conn_vars['ct']),
                     ('Access-Control-Allow-Origin','*') ]
@@ -356,7 +337,6 @@ class CSPSession(object):
     
 if __name__ == "__main__": 
     import sys
-#    print sys.argv
     port = 8000
     try:
         port = int(sys.argv[1])
