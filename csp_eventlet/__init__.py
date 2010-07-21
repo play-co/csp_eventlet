@@ -266,7 +266,7 @@ class CSPSession(object):
             self.packets.pop(0)
 
     def close(self):
-        if self.is_closed = True:
+        if self.is_closed == True:
             return
         self.is_closed = True
         self.send_id+=1
