@@ -127,6 +127,12 @@ class CSPSocket(object):
     
     def recv(self, max):
         return self.session.blocking_recv(max)
+    
+    def close(self):
+        self.session.close()
+        
+    def shutdown(self):
+        self.session.close()
         
 class CSPSession(object):
     
@@ -152,7 +158,7 @@ class CSPSession(object):
         self.conn_vars = {
             "rp":"",
             "rs":"",
-            "du":30,
+            "du":3,
             "is":0, # False
             "i":0,
             "ps":0,
@@ -260,6 +266,8 @@ class CSPSession(object):
             self.packets.pop(0)
 
     def close(self):
+        if self.is_closed = True:
+            return
         self.is_closed = True
         self.send_id+=1
         self.packets.append([self.send_id, 0, None])
