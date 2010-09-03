@@ -1,4 +1,3 @@
-from __future__ import with_statement
 import eventlet
 from eventlet import wsgi
 import cgi
@@ -179,10 +178,17 @@ class CSPSession(object):
             # SPEC TODO: No mention in csp spec (Draft 0.4 Nov 19, 2009) of
             #            session timeout. Choosing twice the comet duration or
             #            60 seconds when du = 0 (polling mode)
-            with eventlet.timeout.Timeout(self.conn_vars['du'] * 2 or 60, False):
-                if self._activity_queue.get():
+            try:
+                if eventlet.timeout.with_timeout(self.conn_vars['du'] * 2 or 60, self._activity_queue.get):
                     break
                 continue
+            except eventlet.timeout.Timeout, e:
+                pass
+            # XXX remove the following:
+            #with eventlet.timeout.Timeout(self.conn_vars['du'] * 2 or 60, False):
+            #    if self._activity_queue.get():
+            #        break
+            #    continue
             if is_teardown:
                 self.teardown()
             else:
@@ -310,8 +316,13 @@ class CSPSession(object):
             self._comet_request_lock.release()
             duration = self.conn_vars['du']
             if duration:
-                with eventlet.timeout.Timeout(duration, False):
-                    self._comet_request_channel.get()
+                try:
+                    eventlet.timeout.with_timeout(duration, self._comet_request_channel.get)
+                except eventlet.timeout.Timeout, e:
+                    pass
+                # XXX remove the following:
+                #with eventlet.timeout.Timeout(duration, False):
+                #    self._comet_request_channel.get()
 
         headers = [ ('Content-type', self.conn_vars['ct']) ,
                     ('Access-Control-Allow-Origin','*') ]
