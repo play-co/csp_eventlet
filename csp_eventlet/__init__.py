@@ -46,7 +46,19 @@ class Listener(object):
         self._sessions = {}
         
     def listen(self):
-        eventlet.spawn(wsgi.server, eventlet.listen((self.interface, self.port)), self)
+#        eventlet.spawn(wsgi.server, eventlet.listen((self.interface, self.port)), self)
+        eventlet.spawn(self._listen)
+
+    def _listen(self):
+        try:
+            wsgi.server(eventlet.listen((self.interface, self.port)), self, max_size=10240)
+        except Exception, e:
+            import sys
+            import traceback
+            print >>sys.stderr, "*** ERROR", e
+            traceback.print_tb(sys.exc_info()[2])
+            sys.exit(1)
+
 
     def __call__(self, environ, start_response):
         path = environ['PATH_INFO']
