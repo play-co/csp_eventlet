@@ -4,6 +4,7 @@ import cgi
 import logging
 import uuid
 import base64
+import sys
 try:
     import json
 except:
@@ -39,14 +40,16 @@ def csp_listener((interface, port)):
     return l
 
 class Listener(object):
-    def __init__(self, interface=None, port=None):
+    def __init__(self, interface=None, port=None, log=None):
         self.interface = interface
         self.port = port
         self._accept_channel = eventlet.queue.Queue(0)
         self._sessions = {}
+        self.log = log or sys.stderr
+
         
     def listen(self):
-        eventlet.spawn(wsgi.server, eventlet.listen((self.interface, self.port)), self)
+        eventlet.spawn(wsgi.server, eventlet.listen((self.interface, self.port)), self, log=self.log)
 
     def __call__(self, environ, start_response):
         path = environ['PATH_INFO']
