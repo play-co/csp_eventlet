@@ -7,7 +7,7 @@ import base64
 import sys
 try:
     import json
-except:
+except ImportError:
     import simplejson as json
     
 logger = logging.getLogger('csp_eventlet')
@@ -59,8 +59,7 @@ class Listener(object):
             return ""
         try:
             form = environ['csp.form'] = get_form(environ)
-        except Exception, e:
-#            raise
+        except StandardError, e:
             start_response('500 internal server error', [('Access-Control-Allow-Origin','*')])
             return "Error parsing form"
         session = None
@@ -200,7 +199,7 @@ class CSPSession(object):
     
     def blocking_send(self, data):
         if self.is_closed:
-            raise Exception("CSPSession is closed, cannot call send")
+            raise StandardError("CSPSession is closed, cannot call send")
         if isinstance(data, unicode):
             # NOTE: we specifically don't encode the data. You can only send 
             #       bytes over csp. Do you rown decoding before you call send.
@@ -220,7 +219,7 @@ class CSPSession(object):
                     self._raise_exc_next_recv = True
                     return ""
                 else:
-                    raise Exception("CSPSession is closed, cannot call recv")
+                    raise StandardError("CSPSession is closed, cannot call recv")
             self._read_queue.get()
         data = self.buffer[:max]
         self.buffer = self.buffer[max:]
@@ -264,7 +263,7 @@ class CSPSession(object):
                     self.conn_vars[key] = typedVal
                     if key == "ps":
                         self.prebuffer = " "*typedVal
-                except:
+                except StandardError:
                     pass
         ack = form.get("a","-1")
         try:
@@ -362,6 +361,6 @@ if __name__ == "__main__":
     port = 8000
     try:
         port = int(sys.argv[1])
-    except:
+    except (TypeError, ValueError):
         pass
     test(port)
