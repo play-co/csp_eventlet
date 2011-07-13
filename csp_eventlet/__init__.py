@@ -246,7 +246,8 @@ class CSPSession(object):
                 data = base64.urlsafe_b64decode(data + '==' )
             self.last_received = key
             self.buffer += data
-            if data:
+            
+            if data and self._read_queue.getting():
                 logger.debug('csp RECV: %s', repr(data))
                 self._read_queue.put(None)
 
