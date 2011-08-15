@@ -12,6 +12,7 @@ except ImportError:
     
 logger = logging.getLogger('csp_eventlet')
 
+POOL_SIZE = 16384
 
 def test(port):
     try:
@@ -40,15 +41,27 @@ def csp_listener((interface, port)):
     return l
 
 class Listener(object):
-    def __init__(self, interface=None, port=None, log=None):
+    def __init__(self, interface=None, port=None, log=None, pool_size=POOL_SIZE):
         self.interface = interface
         self.port = port
         self._accept_channel = eventlet.queue.Queue(0)
         self._sessions = {}
         self.log = log or sys.stderr
+        self._pool_size = pool_size
 
         
     def listen(self):
+        eventlet.spawn(self._listen)
+        
+    def _listen(self):
+        try:
+            wsgi.server(eventlet.listen((self.interface, self.port)), self, max_size=self._pool_size)
+        except Exception, e:
+            import sys
+            import traceback
+            print >>sys.stderr, "*** ERROR", e
+            traceback.print_tb(sys.exc_info()[2])      
+      
         eventlet.spawn(wsgi.server, eventlet.listen((self.interface, self.port)), self, log=self.log)
 
     def __call__(self, environ, start_response):
