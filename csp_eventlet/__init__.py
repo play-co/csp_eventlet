@@ -4,13 +4,15 @@ import cgi
 import logging
 import uuid
 import base64
+import sys
 try:
     import json
-except:
+except ImportError:
     import simplejson as json
     
 logger = logging.getLogger('csp_eventlet')
 
+POOL_SIZE = 16384
 
 def test(port):
     try:
@@ -39,26 +41,28 @@ def csp_listener((interface, port)):
     return l
 
 class Listener(object):
-    def __init__(self, interface=None, port=None):
+    def __init__(self, interface=None, port=None, log=None, pool_size=POOL_SIZE):
         self.interface = interface
         self.port = port
         self._accept_channel = eventlet.queue.Queue(0)
         self._sessions = {}
+        self.log = log or sys.stderr
+        self._pool_size = pool_size
+
         
     def listen(self):
-#        eventlet.spawn(wsgi.server, eventlet.listen((self.interface, self.port)), self)
         eventlet.spawn(self._listen)
-
+        
     def _listen(self):
         try:
-            wsgi.server(eventlet.listen((self.interface, self.port)), self, max_size=10240)
+            wsgi.server(eventlet.listen((self.interface, self.port)), self, max_size=self._pool_size)
         except Exception, e:
             import sys
             import traceback
             print >>sys.stderr, "*** ERROR", e
-            traceback.print_tb(sys.exc_info()[2])
-            sys.exit(1)
-
+            traceback.print_tb(sys.exc_info()[2])      
+      
+        eventlet.spawn(wsgi.server, eventlet.listen((self.interface, self.port)), self, log=self.log)
 
     def __call__(self, environ, start_response):
         path = environ['PATH_INFO']
@@ -69,7 +73,6 @@ class Listener(object):
         try:
             form = environ['csp.form'] = get_form(environ)
         except Exception, e:
-#            raise
             start_response('500 internal server error', [('Access-Control-Allow-Origin','*')])
             return "Error parsing form"
         session = None
@@ -256,7 +259,8 @@ class CSPSession(object):
                 data = base64.urlsafe_b64decode(data + '==' )
             self.last_received = key
             self.buffer += data
-            if data:
+            
+            if data and self._read_queue.getting():
                 logger.debug('csp RECV: %s', repr(data))
                 self._read_queue.put(None)
 
@@ -273,7 +277,7 @@ class CSPSession(object):
                     self.conn_vars[key] = typedVal
                     if key == "ps":
                         self.prebuffer = " "*typedVal
-                except:
+                except Exception:
                     pass
         ack = form.get("a","-1")
         try:
@@ -371,6 +375,6 @@ if __name__ == "__main__":
     port = 8000
     try:
         port = int(sys.argv[1])
-    except:
+    except (TypeError, ValueError):
         pass
     test(port)
